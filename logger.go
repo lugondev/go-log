@@ -170,8 +170,6 @@ func (l *_logger) emitLog(ctx context.Context, severity log.Severity, body log.V
 	// Log to stdout using Zap
 	zapLevel := otelSeverityToZapLevel(severity)
 	fields := otelAttrsToZapFields(attrs)
-	fmt.Println("zapLevel:", zapLevel)
-	fmt.Println("body:", body)
 	l.zapLogger.Log(zapLevel, body.AsString(), fields...)
 
 	// Send to OpenTelemetry
