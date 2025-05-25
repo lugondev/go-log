@@ -39,6 +39,7 @@ type _logger struct {
 	logger    log.Logger
 	provider  log.LoggerProvider
 	zapLogger *zap.Logger
+	otp       *Option
 	fatalHook func()
 }
 
@@ -72,8 +73,12 @@ func NewLogger(opt *Option) (Logger, error) {
 	var encoder zapcore.Encoder
 	if strings.Contains(strings.ToLower(opt.Format), "json") {
 		encoder = zapcore.NewJSONEncoder(encoderConfig)
+		opt.Format = "json"
 	} else {
+		// Enable colors for console format
+		encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 		encoder = zapcore.NewConsoleEncoder(encoderConfig)
+		opt.Format = "console"
 	}
 
 	core := zapcore.NewCore(
@@ -105,6 +110,7 @@ func NewLogger(opt *Option) (Logger, error) {
 		logger:    logger,
 		provider:  provider,
 		zapLogger: zapLogger,
+		otp:       opt,
 	}
 
 	otelLogger.Info(context.Background(), "Logger initialized successfully")
@@ -170,7 +176,13 @@ func (l *_logger) emitLog(ctx context.Context, severity log.Severity, body log.V
 	// Log to stdout using Zap
 	zapLevel := otelSeverityToZapLevel(severity)
 	fields := otelAttrsToZapFields(attrs)
-	l.zapLogger.Log(zapLevel, body.AsString(), fields...)
+	if l.otp.Format == "console" {
+		// For console format, output in Key=Value format
+		l.logConsoleFormat(zapLevel, body.AsString(), fields)
+	} else {
+		// Use JSON format
+		l.zapLogger.Log(zapLevel, body.AsString(), fields...)
+	}
 
 	// Send to OpenTelemetry
 	l.logger.Emit(ctx, *record)
@@ -191,6 +203,81 @@ func otelSeverityToZapLevel(severity log.Severity) zapcore.Level {
 	default:
 		return zapcore.InfoLevel
 	}
+}
+
+func (l *_logger) logConsoleFormat(level zapcore.Level, msg string, fields []zap.Field) {
+	var output strings.Builder
+
+	// Add timestamp
+	output.WriteString(time.Now().Format("2006-01-02T15:04:05.000Z07:00"))
+	output.WriteString(" ")
+
+	// Add level
+	levelStr := level.CapitalString()
+	switch level {
+	case zapcore.DebugLevel:
+		levelStr = "\033[36mDEBUG\033[0m" // Cyan
+	case zapcore.InfoLevel:
+		levelStr = "\033[32mINFO\033[0m" // Green
+	case zapcore.WarnLevel:
+		levelStr = "\033[33mWARN\033[0m" // Yellow
+	case zapcore.ErrorLevel:
+		levelStr = "\033[31mERROR\033[0m" // Red
+	case zapcore.FatalLevel:
+		levelStr = "\033[35mFATAL\033[0m" // Magenta
+	}
+	output.WriteString(levelStr)
+	output.WriteString(" ")
+
+	// Add message
+	output.WriteString(msg)
+
+	// Add fields in Key=Value format (each on a new line with 2 tab indentation)
+	for _, field := range fields {
+		output.WriteString(" \n\t")
+		output.WriteString(field.Key)
+		output.WriteString("=")
+
+		// Format field value based on type
+		switch field.Type {
+		case zapcore.StringType:
+			output.WriteString(field.String)
+		case zapcore.Int64Type:
+			output.WriteString(fmt.Sprintf("%d", field.Integer))
+		case zapcore.Float64Type:
+			if field.Interface != nil {
+				if val, ok := field.Interface.(float64); ok {
+					output.WriteString(fmt.Sprintf("%g", val))
+				} else {
+					output.WriteString(fmt.Sprintf("%v", field.Interface))
+				}
+			} else {
+				output.WriteString("<nil>")
+			}
+		case zapcore.BoolType:
+			if field.Integer == 1 {
+				output.WriteString("true")
+			} else {
+				output.WriteString("false")
+			}
+		default:
+			if field.Interface != nil {
+				output.WriteString(fmt.Sprintf("%v", field.Interface))
+			} else {
+				output.WriteString("<nil>")
+			}
+		}
+	}
+
+	// Add caller information
+	if pc, file, line, ok := getCallerFrame(4); ok {
+		output.WriteString(" \ncaller=")
+		output.WriteString(fmt.Sprintf("%s:%d", file, line))
+		_ = pc // unused but needed for getCallerFrame
+	}
+
+	output.WriteString("\n")
+	fmt.Print(output.String())
 }
 
 func otelAttrsToZapFields(attrs []log.KeyValue) []zap.Field {

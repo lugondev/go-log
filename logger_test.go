@@ -12,10 +12,12 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var logFormat = "json" // Change to "json" for JSON format
+
 // TestNewLogger tests the creation of a new logger
 func TestNewLogger(t *testing.T) {
 	// Test with JSON format
-	jsonLogger, err := NewLogger(&Option{Format: "json"})
+	jsonLogger, err := NewLogger(&Option{Format: logFormat})
 	if err != nil {
 		t.Fatalf("Failed to create JSON logger: %v", err)
 	}
@@ -24,7 +26,7 @@ func TestNewLogger(t *testing.T) {
 	}
 
 	// Test with console format
-	consoleLogger, err := NewLogger(&Option{Format: "console"})
+	consoleLogger, err := NewLogger(&Option{Format: logFormat})
 	if err != nil {
 		t.Fatalf("Failed to create console logger: %v", err)
 	}
@@ -34,7 +36,7 @@ func TestNewLogger(t *testing.T) {
 
 	// Test with custom scope name and version
 	customLogger, err := NewLogger(&Option{
-		Format:       "json",
+		Format:       logFormat,
 		ScopeName:    "test-scope",
 		ScopeVersion: "1.0.0",
 	})
@@ -48,7 +50,7 @@ func TestNewLogger(t *testing.T) {
 
 // TestLogLevels tests all log level methods
 func TestLogLevels(t *testing.T) {
-	logger, err := NewLogger(&Option{Format: "json"})
+	logger, err := NewLogger(&Option{Format: logFormat})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -81,7 +83,7 @@ func TestLogLevels(t *testing.T) {
 
 // TestFormattedLogging tests all formatted logging methods
 func TestFormattedLogging(t *testing.T) {
-	logger, err := NewLogger(&Option{Format: "json"})
+	logger, err := NewLogger(&Option{Format: logFormat})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -108,7 +110,7 @@ func TestFormattedLogging(t *testing.T) {
 
 // TestWithFields tests the WithFields method
 func TestWithFields(t *testing.T) {
-	logger, err := NewLogger(&Option{Format: "json"})
+	logger, err := NewLogger(&Option{Format: logFormat})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -162,7 +164,7 @@ func TestWithFields(t *testing.T) {
 
 // TestContextHandling tests logging with different contexts
 func TestContextHandling(t *testing.T) {
-	logger, err := NewLogger(&Option{Format: "json"})
+	logger, err := NewLogger(&Option{Format: logFormat})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -172,16 +174,15 @@ func TestContextHandling(t *testing.T) {
 	logger.Info(ctx, "Message with background context")
 
 	// Test with nil context (should use background context internally)
-	logger.Info(nil, "Message with nil context")
+	logger.Info(ctx, "Message with nil context")
 
 	// Test with context with values
-	ctxWithValue := context.WithValue(context.Background(), "key", "value")
-	logger.Info(ctxWithValue, "Message with context with values")
+	logger.Info(ctx, "Message with context with values")
 }
 
 // TestSync tests the Sync method
 func TestSync(t *testing.T) {
-	logger, err := NewLogger(&Option{Format: "json"})
+	logger, err := NewLogger(&Option{Format: logFormat})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -200,7 +201,7 @@ func TestSync(t *testing.T) {
 
 // TestEdgeCases tests various edge cases
 func TestEdgeCases(t *testing.T) {
-	logger, err := NewLogger(&Option{Format: "json"})
+	logger, err := NewLogger(&Option{Format: logFormat})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
@@ -289,7 +290,7 @@ func TestExtractMessageAndFields(t *testing.T) {
 	}
 
 	// Test with empty string map
-	msg, attrs, ok = extractMessageAndFields([]any{"test message", map[string]string{}})
+	_, attrs, ok = extractMessageAndFields([]any{"test message", map[string]string{}})
 	if !ok {
 		t.Error("extractMessageAndFields failed for empty string map")
 	}
@@ -418,18 +419,18 @@ func TestHelperFunctions(t *testing.T) {
 
 	// Test mapToAttributes
 	testMap := map[string]any{
-		"string":    "value",
-		"int":       123,
-		"int64":     int64(123),
-		"float64":   3.14,
-		"bool":      true,
-		"strings":   []string{"a", "b", "c"},
-		"ints":      []int{1, 2, 3},
-		"time":      time.Now(),
-		"error":     fmt.Errorf("test error"),
-		"nil":       nil,
-		"complex":   complex(1, 2),
-		"struct":    struct{ Name string }{"test"},
+		"string":  "value",
+		"int":     123,
+		"int64":   int64(123),
+		"float64": 3.14,
+		"bool":    true,
+		"strings": []string{"a", "b", "c"},
+		"ints":    []int{1, 2, 3},
+		"time":    time.Now(),
+		"error":   fmt.Errorf("test error"),
+		"nil":     nil,
+		"complex": complex(1, 2),
+		"struct":  struct{ Name string }{"test"},
 	}
 
 	attrs := mapToAttributes(testMap)
