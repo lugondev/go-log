@@ -371,19 +371,22 @@ func (l *_logger) log(ctx context.Context, severity log.Severity, args ...any) {
 	traceId := span.SpanContext().TraceID().String()
 	spanId := span.SpanContext().SpanID().String()
 
+	// Only add trace fields if they contain actual tracing information (not zero values)
+	var traceFields []log.KeyValue
+	if traceId != "00000000000000000000000000000000" {
+		traceFields = append(traceFields, log.String("trace_id", traceId))
+	}
+	if spanId != "0000000000000000" {
+		traceFields = append(traceFields, log.String("span_id", spanId))
+	}
+
 	if len(args) >= 2 {
 		if msg, fields, ok := extractMessageAndFields(args); ok {
-			l.emitLog(ctx, severity, log.StringValue(msg), append(fields,
-				log.String("trace_id", traceId),
-				log.String("span_id", spanId),
-			)...)
+			l.emitLog(ctx, severity, log.StringValue(msg), append(fields, traceFields...)...)
 			return
 		}
 	}
-	l.emitLog(ctx, severity, argsToValue(args...),
-		log.String("trace_id", traceId),
-		log.String("span_id", spanId),
-	)
+	l.emitLog(ctx, severity, argsToValue(args...), traceFields...)
 }
 
 func (l *_logger) Debug(ctx context.Context, args ...any) {
