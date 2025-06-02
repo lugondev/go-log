@@ -26,4 +26,7 @@ type Logger interface {
 
 	// Sync flushes any buffered log entries
 	Sync() error
+
+	// SetLevel sets the minimum log level that will be processed
+	SetLevel(level string) error
 }

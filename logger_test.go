@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -442,5 +443,93 @@ func TestHelperFunctions(t *testing.T) {
 	emptyAttrs := mapToAttributes(map[string]any{})
 	if len(emptyAttrs) != 0 {
 		t.Errorf("mapToAttributes for empty map returned non-empty attributes: %v", emptyAttrs)
+	}
+}
+
+// BenchmarkConcurrentLogging benchmarks the logger under concurrent load
+func BenchmarkConcurrentLogging(b *testing.B) {
+	// Create a logger with JSON format to avoid console mutex contention
+	logger, err := NewLogger(&Option{Format: "json"})
+	if err != nil {
+		b.Fatalf("Failed to create logger: %v", err)
+	}
+
+	// Run benchmarks with different numbers of goroutines
+	for _, numGoroutines := range []int{1, 4, 8, 16, 32, 64} {
+		b.Run(fmt.Sprintf("Goroutines-%d", numGoroutines), func(b *testing.B) {
+			b.ResetTimer()
+
+			// Create a wait group to synchronize goroutines
+			var wg sync.WaitGroup
+
+			// Calculate logs per goroutine
+			logsPerGoroutine := b.N / numGoroutines
+			if logsPerGoroutine < 1 {
+				logsPerGoroutine = 1
+			}
+
+			// Launch goroutines
+			for i := 0; i < numGoroutines; i++ {
+				wg.Add(1)
+				go func(id int) {
+					defer wg.Done()
+					ctx := context.Background()
+
+					for j := 0; j < logsPerGoroutine; j++ {
+						// Log with different patterns to exercise different code paths
+						switch j % 4 {
+						case 0:
+							// Simple log
+							logger.Info(ctx, fmt.Sprintf("Log message %d from goroutine %d", j, id))
+						case 1:
+							// Log with fields
+							logger.Info(ctx, "Log with fields", map[string]any{
+								"goroutine_id": id,
+								"counter":      j,
+								"timestamp":    time.Now().UnixNano(),
+							})
+						case 2:
+							// Formatted log
+							logger.Infof(ctx, "Formatted log %d from goroutine %d with value %f",
+								j, id, float64(j)/float64(id+1))
+						case 3:
+							// Log with WithFields
+							loggerWithFields := logger.WithFields(map[string]any{
+								"goroutine_id": id,
+								"counter":      j,
+							})
+							loggerWithFields.Info(ctx, "Log from logger with fields")
+						}
+					}
+				}(i)
+			}
+
+			// Wait for all goroutines to complete
+			wg.Wait()
+		})
+	}
+}
+
+// BenchmarkConsoleVsJsonFormat compares the performance of console and JSON formats
+func BenchmarkConsoleVsJsonFormat(b *testing.B) {
+	// Test with both formats
+	for _, format := range []string{"console", "json"} {
+		b.Run(format, func(b *testing.B) {
+			logger, err := NewLogger(&Option{Format: format})
+			if err != nil {
+				b.Fatalf("Failed to create logger: %v", err)
+			}
+
+			ctx := context.Background()
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				logger.Info(ctx, "Benchmark log message", map[string]any{
+					"counter":   i,
+					"timestamp": time.Now().UnixNano(),
+					"value":     fmt.Sprintf("test value %d", i),
+				})
+			}
+		})
 	}
 }
